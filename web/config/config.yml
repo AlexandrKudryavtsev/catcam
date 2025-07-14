@@ -1,0 +1,12 @@
+http:
+  port: '8080'
+
+logger:
+  level: 'debug'
+  destination: 'console'
+
+elastic:
+  addresses:
+    - "http://localhost:9200"
+  conn_timeout: "5s"
+  conn_attempts: 10

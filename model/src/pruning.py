@@ -96,6 +96,8 @@ def iterative_pruning_finetuning(model,
     os.makedirs(model_dir, exist_ok=True)
     criterion = torch.nn.BCEWithLogitsLoss()
 
+    prune_history = []
+
     for i in range(num_iterations):
         print(f"\n--- Iteration {i+1}/{num_iterations} ---")
 
@@ -147,6 +149,8 @@ def iterative_pruning_finetuning(model,
             early_stopping_patience=early_stopping_patience
         )
 
+        prune_history.append(train_history)
+
         val_metrics = evaluate(model, val_loader, device, criterion)
         print(f"Validation after fine-tuning: {val_metrics}")
 
@@ -154,4 +158,4 @@ def iterative_pruning_finetuning(model,
         model_filepath = os.path.join(model_dir, model_filename)
         torch.save(model.state_dict(), model_filepath)
 
-    return model
+    return prune_history

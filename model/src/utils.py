@@ -4,36 +4,52 @@ import os
 import time
 import copy
 import random
+import tensorflow as tf
 from torch.nn.utils import prune
 from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_score, fbeta_score
 
-
-def calculate_metrics(outputs, labels, threshold=0.5, beta=0.5):
+def calculate_metrics(logits, labels, threshold=0.5, beta=0.5, apply_sigmoid=True):
     with torch.no_grad():
-        if (type(outputs) != np.ndarray):
-            outputs = outputs.numpy()
-        if (type(labels) != np.ndarray):
-            labels = labels.numpy()
-
-        preds = (outputs > threshold)
-
+        if isinstance(logits, torch.Tensor):
+            logits = logits.cpu().numpy()
+        if isinstance(labels, torch.Tensor):
+            labels = labels.cpu().numpy()
+        
+        if apply_sigmoid:
+            probabilities = 1 / (1 + np.exp(-logits))
+        else:
+            probabilities = logits
+            
+        preds = (probabilities > threshold).astype(int)
+        
         precision = precision_score(labels, preds, zero_division=0)
         recall = recall_score(labels, preds, zero_division=0)
         f1 = f1_score(labels, preds, zero_division=0)
-        fbeta = fbeta_score(labels, preds, beta=beta)
-        roc_auc = roc_auc_score(labels, outputs)
-
+        fbeta = fbeta_score(labels, preds, beta=beta, zero_division=0)
+        
+        try:
+            roc_auc = roc_auc_score(labels, probabilities)
+        except ValueError:
+            roc_auc = 0.0
+            
     return {
         'precision': precision,
         'recall': recall,
         'f1_score': f1,
-        'fbeta_score' : fbeta,
-        'roc_auc': roc_auc
+        'fbeta_score': fbeta,
+        'roc_auc': roc_auc,
+        'threshold': threshold
     }
 
-def show_metrics(metrics):
-  for metric_name in metrics.keys():
-    print(f"{metric_name}: {metrics[metric_name]:.4f}")
+def show_metrics(metrics, model_name="Model"):
+    print(f"{model_name} metrics: ")
+    print("=" * 45)
+    print(f"Precision:    {metrics['precision']:.4f}")
+    print(f"Recall:       {metrics['recall']:.4f}")
+    print(f"F1-Score:     {metrics['f1_score']:.4f}")
+    print(f"F{metrics['beta']}-Score:    {metrics['fbeta_score']:.4f}")
+    print(f"ROC-AUC:      {metrics['roc_auc']:.4f}")
+    print(f"Threshold:    {metrics['threshold']:.4f}\n")
 
 def save_model(model, model_dir, model_filename):
 
@@ -56,66 +72,78 @@ def set_random_seeds(random_seed=0):
     np.random.seed(random_seed)
     random.seed(random_seed)
 
-def measure_inference_latency(model,
-                              device,
-                              input_size=(1, 3, 32, 32),
-                              num_samples=100,
-                              num_warmups=10):
+def inference_tflite_model(tflite_model_filepath, dataloader, a=1.0, b=0):
+    interpreter = tf.lite.Interpreter(model_path=tflite_model_filepath)
+    interpreter.allocate_tensors()
+    
+    input_details = interpreter.get_input_details()
+    output_details = interpreter.get_output_details()
 
+    input_scale, input_zero_point = input_details['quantization'][0], input_details['quantization'][1]
+    output_scale, output_zero_point = output_details['quantization'][0], output_details['quantization'][1]
+
+    logits = []
+    labels = []
+    
+    with torch.no_grad():
+        for image, label in dataloader:
+            image_nhwc = image.permute(0, 2, 3, 1).numpy().astype(np.float32)
+
+            image_int8 = (image_nhwc / input_scale + input_zero_point).astype(input_details["dtype"])
+            
+            interpreter.set_tensor(input_details[0]['index'], image_int8)
+            interpreter.invoke()
+            
+            output_int8 = interpreter.get_tensor(output_details[0]['index'])
+
+            output_fp32 = (output_int8.astype(np.float32) - output_zero_point) * output_scale
+            correct_output = 1 / (1 + np.exp(a*output_fp32 + b)) #applying calibration
+
+            logits.append(correct_output.flatten())
+            labels.extend(label.numpy().flatten())
+
+    tflite_logits = np.array(logits)
+    tflite_labels = np.array(labels)
+
+    return tflite_logits, tflite_labels
+
+def measure_pytorch_time(model, input_shape=(1, 3, 224, 224), device='cpu', num_runs=50):
+    model.eval()
     model.to(device)
-    model.eval()
-
-    x = torch.rand(size=input_size).to(device)
-
+    
+    dummy_input = torch.randn(input_shape).to(device)
+    scripted_model = torch.jit.script(model)
+    
     with torch.no_grad():
-        for _ in range(num_warmups):
-            _ = model(x)
-    torch.cuda.synchronize()
-
+        for _ in range(5):
+            _ = scripted_model(dummy_input)
+    
+    start_time = time.time()
     with torch.no_grad():
-        start_time = time.time()
-        for _ in range(num_samples):
-            _ = model(x)
-            torch.cuda.synchronize()
-        end_time = time.time()
-    elapsed_time = end_time - start_time
-    elapsed_time_ave = elapsed_time / num_samples
+        for _ in range(num_runs):
+            _ = scripted_model(dummy_input)
+    end_time = time.time()
+    
+    avg_time = (end_time - start_time) / num_runs
+    return avg_time * 1000
 
-    return elapsed_time_ave
-
-
-    model = torch.jit.load(model_filepath, map_location=device)
-
-    return model
-
-def fuse_model(model, model_name):
-
-    fused_model = copy.deepcopy(model)
-
-    model.eval()
-    fused_model.eval()
-
-    if (model_name == 'mobilenet_v3_small'):
-        torch.quantization.fuse_modules(model.features, [["0.0", "0.1"]], inplace=True)
-        
-        for name, module in model.features.named_children():
-            if isinstance(module, torch.nn.Sequential):
-                if len(module) >= 2:
-                    if isinstance(module[0], torch.nn.Conv2d) and isinstance(module[1], torch.nn.BatchNorm2d):
-                        if len(module) > 2 and isinstance(module[2], torch.nn.ReLU):
-                            torch.quantization.fuse_modules(module, [["0", "1", "2"]], inplace=True)
-                        else:
-                            torch.quantization.fuse_modules(module, [["0", "1"]], inplace=True)
-
-    elif (model_name == 'efficientnet_b0'):
-        torch.quantization.fuse_modules(model.features, [["0.0", "0.1"]], inplace=True)
-        
-        for block in model.features:
-            if hasattr(block, "block"):
-                if hasattr(block.block[0], "0") and hasattr(block.block[0], "1"):
-                    torch.quantization.fuse_modules(block.block[0], [["0", "1"]], inplace=True)
-                if hasattr(block.block[2], "0") and hasattr(block.block[2], "1"):
-                    torch.quantization.fuse_modules(block.block[2], [["0", "1"]], inplace=True)
-                    
-    return model
-
+def measure_tflite_time(tflite_model, input_shape=(1, 224, 224, 3), num_runs=50):
+    interpreter = tf.lite.Interpreter(model_content=tflite_model)
+    interpreter.allocate_tensors()
+    
+    input_details = interpreter.get_input_details()
+    
+    for _ in range(5):
+        interpreter.set_tensor(input_details[0]['index'], 
+                             np.random.random(input_shape).astype(np.float32))
+        interpreter.invoke()
+    
+    start_time = time.time()
+    for _ in range(num_runs):
+        interpreter.set_tensor(input_details[0]['index'], 
+                             np.random.random(input_shape).astype(np.float32))
+        interpreter.invoke()
+    end_time = time.time()
+    
+    avg_time = (end_time - start_time) / num_runs
+    return avg_time * 1000

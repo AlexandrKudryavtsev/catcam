@@ -67,8 +67,8 @@ def evaluate(model, dataloader, device, criterion=None, threshold=0.5):
     return metrics
 
 def train_loop(model,
-               train_loader,
-               val_loader,
+               train_dataloader,
+               val_dataloader,
                criterion,
                optimizer,
                scheduler,
@@ -88,8 +88,8 @@ def train_loop(model,
     for epoch in range(epochs):
         print(f"\nEpoch {epoch+1}/{epochs}")
 
-        train_metrics = train_epoch(model, train_loader, criterion, optimizer, device)
-        val_metrics = evaluate(model, val_loader, device, criterion)
+        train_metrics = train_epoch(model, train_dataloader, criterion, optimizer, device)
+        val_metrics = evaluate(model, val_dataloader, device, criterion)
 
         scheduler.step(val_metrics['loss'])
 

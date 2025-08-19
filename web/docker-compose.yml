@@ -9,6 +9,10 @@ services:
       - "8080:8080"
     env_file:
       - .env
+    depends_on:
+      - mqtt5
+    networks:
+      - mqtt5-network
       
   mqtt5:
     image: eclipse-mosquitto
@@ -20,6 +24,13 @@ services:
       - ./config:/mosquitto/config:rw
       - ./data:/mosquitto/data:rw
       - ./log:/mosquitto/log:rw
+    networks:
+      - mqtt5-network
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_pub -h localhost -t test -m test || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
 
 volumes:
@@ -28,5 +39,5 @@ volumes:
   log:
 
 networks:
-  default:
-    name: mqtt5-network
+  mqtt5-network:
+    driver: bridge

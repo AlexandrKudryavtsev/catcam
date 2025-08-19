@@ -1,4 +1,4 @@
-# GoMovieSearch
+# catcam/web
 
 Required:
 
@@ -9,14 +9,14 @@ Required:
 Commands:
 
 1) Docker Compose
-    - `compose-up` run docker-compose with Elasticsearch and app
-    - `compose-devs` run docker-compose with Elasticsearch
+    - `compose-up` run docker-compose with mqtt and app
+    - `compose-devs` run docker-compose with mqtt
     - `compose-down` stop and remove containers
     - `compose-logs` show logs for all services
     - `remove-volume` remove docker volume
 
 2) Application
-    - `run-app` run application locally (requires Elasticsearch)
+    - `run-app` run application locally (requires mqtt)
 
 3) Testing
     - `test` run unit tests
@@ -58,9 +58,8 @@ Structure
 │   ├── entity         # app entities
 │   └── usecase        # controller processing
 ├── migrations         # migrations files
-├── scripts            # javascript parser of kinopoisk.ru
 └── pkg                # only auxiliary code
     ├── httpserver
     ├── logger
-    └── elastic
+    └── mqtt
 ```

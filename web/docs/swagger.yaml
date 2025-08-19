@@ -1,10 +1,149 @@
 basePath: /api
+definitions:
+  entity.BoundingBox:
+    properties:
+      height:
+        type: integer
+      width:
+        type: integer
+      x:
+        type: integer
+      "y":
+        type: integer
+    type: object
+  entity.CameraEvent:
+    properties:
+      bounding_box:
+        $ref: '#/definitions/entity.BoundingBox'
+      event_type:
+        $ref: '#/definitions/entity.EventType'
+      timestamp:
+        type: string
+    type: object
+  entity.EventType:
+    enum:
+    - cat_detected
+    type: string
+    x-enum-varnames:
+    - EventTypeCatDetected
+  v1.getEventsResponse:
+    properties:
+      events:
+        items:
+          $ref: '#/definitions/entity.CameraEvent'
+        type: array
+    type: object
+  v1.getStatusResponse:
+    properties:
+      online:
+        type: boolean
+    type: object
+  v1.response:
+    properties:
+      error:
+        example: message
+        type: string
+    type: object
+  v1.startStreamRequest:
+    properties:
+      url:
+        type: string
+    required:
+    - url
+    type: object
 info:
   contact: {}
-  description: movie search and autocomplete
-  title: AlexandrKudryavtsev/GoMovieSearch
+  description: Backend for IoT and CV project
+  title: AlexandrKudryavtsev/catcam
   version: "1.0"
 paths:
+  /camera/events:
+    get:
+      consumes:
+      - application/json
+      description: Get all detected events
+      operationId: get-events
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v1.getEventsResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.response'
+      summary: Get camera events
+      tags:
+      - camera
+  /camera/status:
+    get:
+      consumes:
+      - application/json
+      description: Get camera online status
+      operationId: get-status
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v1.getStatusResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.response'
+      summary: Get camera status
+      tags:
+      - camera
+  /camera/stream/start:
+    post:
+      consumes:
+      - application/json
+      description: Start video stream from camera
+      operationId: start-stream
+      parameters:
+      - description: Stream URL
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/v1.startStreamRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.response'
+      summary: Start video stream
+      tags:
+      - camera
+  /camera/stream/stop:
+    post:
+      consumes:
+      - application/json
+      description: Stop video stream from camera
+      operationId: stop-stream
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/v1.response'
+      summary: Stop video stream
+      tags:
+      - camera
   /healthz:
     get:
       operationId: healthz

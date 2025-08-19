@@ -3,3 +3,4 @@ app.log
 bin
 data
 log
+.DS_Store

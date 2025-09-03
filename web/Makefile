@@ -12,10 +12,10 @@ help: ## Display this help screen
 ##@ Docker Compose
 
 compose-up: ### Run docker-compose with devs and app
-	docker-compose up --build -d app
+	docker-compose up --build -d app mqtt5
 
 compose-devs: ### Run docker-compose with devs
-	docker-compose up --build -d
+	docker-compose up --build -d mqtt5
 
 compose-down: ### Stop and remove containers
 	docker-compose down --remove-orphans

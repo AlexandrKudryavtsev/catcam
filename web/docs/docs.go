@@ -15,6 +15,137 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/camera/events": {
+            "get": {
+                "description": "Get all detected events",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "camera"
+                ],
+                "summary": "Get camera events",
+                "operationId": "get-events",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v1.getEventsResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/v1.response"
+                        }
+                    }
+                }
+            }
+        },
+        "/camera/status": {
+            "get": {
+                "description": "Get camera online status",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "camera"
+                ],
+                "summary": "Get camera status",
+                "operationId": "get-status",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v1.getStatusResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/v1.response"
+                        }
+                    }
+                }
+            }
+        },
+        "/camera/stream/start": {
+            "post": {
+                "description": "Start video stream from camera",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "camera"
+                ],
+                "summary": "Start video stream",
+                "operationId": "start-stream",
+                "parameters": [
+                    {
+                        "description": "Stream URL",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v1.startStreamRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/v1.response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/v1.response"
+                        }
+                    }
+                }
+            }
+        },
+        "/camera/stream/stop": {
+            "post": {
+                "description": "Stop video stream from camera",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "camera"
+                ],
+                "summary": "Stop video stream",
+                "operationId": "stop-stream",
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/v1.response"
+                        }
+                    }
+                }
+            }
+        },
         "/healthz": {
             "get": {
                 "tags": [
@@ -29,6 +160,87 @@ const docTemplate = `{
                     "500": {
                         "description": "Internal Server Error"
                     }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "entity.BoundingBox": {
+            "type": "object",
+            "properties": {
+                "height": {
+                    "type": "integer"
+                },
+                "width": {
+                    "type": "integer"
+                },
+                "x": {
+                    "type": "integer"
+                },
+                "y": {
+                    "type": "integer"
+                }
+            }
+        },
+        "entity.CameraEvent": {
+            "type": "object",
+            "properties": {
+                "bounding_box": {
+                    "$ref": "#/definitions/entity.BoundingBox"
+                },
+                "event_type": {
+                    "$ref": "#/definitions/entity.EventType"
+                },
+                "timestamp": {
+                    "type": "string"
+                }
+            }
+        },
+        "entity.EventType": {
+            "type": "string",
+            "enum": [
+                "cat_detected"
+            ],
+            "x-enum-varnames": [
+                "EventTypeCatDetected"
+            ]
+        },
+        "v1.getEventsResponse": {
+            "type": "object",
+            "properties": {
+                "events": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/entity.CameraEvent"
+                    }
+                }
+            }
+        },
+        "v1.getStatusResponse": {
+            "type": "object",
+            "properties": {
+                "online": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "v1.response": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string",
+                    "example": "message"
+                }
+            }
+        },
+        "v1.startStreamRequest": {
+            "type": "object",
+            "required": [
+                "url"
+            ],
+            "properties": {
+                "url": {
+                    "type": "string"
                 }
             }
         }
@@ -48,8 +260,8 @@ var SwaggerInfo = &swag.Spec{
 	Host:             "",
 	BasePath:         "/api",
 	Schemes:          []string{"https", "http"},
-	Title:            "AlexandrKudryavtsev/GoMovieSearch",
-	Description:      "movie search and autocomplete",
+	Title:            "AlexandrKudryavtsev/catcam",
+	Description:      "Backend for IoT and CV project",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 }

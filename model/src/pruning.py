@@ -78,8 +78,8 @@ def remove_parameters(model):
     return model
 
 def iterative_pruning_finetuning(model,
-                                train_loader,
-                                val_loader,
+                                train_dataloader,
+                                val_dataloader,
                                 device,
                                 learning_rate=1e-3,
                                 l1_regularization_strength=0.0,
@@ -122,7 +122,7 @@ def iterative_pruning_finetuning(model,
                 elif isinstance(module, torch.nn.Linear):
                     prune.l1_unstructured(module, name="weight", amount=linear_prune_amount)
 
-        val_metrics = evaluate(model, val_loader, device, criterion)
+        val_metrics = evaluate(model, val_dataloader, device, criterion)
         num_zeros, num_elements, sparsity = measure_global_sparsity(
             model, weight=True, bias=False, conv2d_use_mask=True, linear_use_mask=True)
 
@@ -139,8 +139,8 @@ def iterative_pruning_finetuning(model,
 
         train_history = train_loop(
             model=model,
-            train_loader=train_loader,
-            val_loader=val_loader,
+            train_dataloader=train_dataloader,
+            val_dataloader=val_dataloader,
             criterion=criterion,
             optimizer=optimizer,
             scheduler=scheduler,
@@ -151,7 +151,7 @@ def iterative_pruning_finetuning(model,
 
         prune_history.append(train_history)
 
-        val_metrics = evaluate(model, val_loader, device, criterion)
+        val_metrics = evaluate(model, val_dataloader, device, criterion)
         print(f"Validation after fine-tuning: {val_metrics}")
 
         model_filename = f"{model_filename_prefix}_iter_{i+1}.pt"

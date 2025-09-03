@@ -2,7 +2,6 @@ import torch
 import numpy as np
 import os
 import time
-import copy
 import random
 import tensorflow as tf
 from torch.nn.utils import prune
@@ -41,13 +40,13 @@ def calculate_metrics(logits, labels, threshold=0.5, beta=0.5, apply_sigmoid=Tru
         'threshold': threshold
     }
 
-def show_metrics(metrics, model_name="Model"):
+def show_metrics(metrics, model_name="Model", beta=0.5):
     print(f"{model_name} metrics: ")
     print("=" * 45)
     print(f"Precision:    {metrics['precision']:.4f}")
     print(f"Recall:       {metrics['recall']:.4f}")
     print(f"F1-Score:     {metrics['f1_score']:.4f}")
-    print(f"F{metrics['beta']}-Score:    {metrics['fbeta_score']:.4f}")
+    print(f"F{beta}-Score:    {metrics['fbeta_score']:.4f}")
     print(f"ROC-AUC:      {metrics['roc_auc']:.4f}")
     print(f"Threshold:    {metrics['threshold']:.4f}\n")
 
@@ -79,8 +78,8 @@ def inference_tflite_model(tflite_model_filepath, dataloader, a=1.0, b=0):
     input_details = interpreter.get_input_details()
     output_details = interpreter.get_output_details()
 
-    input_scale, input_zero_point = input_details['quantization'][0], input_details['quantization'][1]
-    output_scale, output_zero_point = output_details['quantization'][0], output_details['quantization'][1]
+    input_scale, input_zero_point = input_details[0]['quantization'][0], input_details[0]['quantization'][1]
+    output_scale, output_zero_point = output_details[0]['quantization'][0], output_details[0]['quantization'][1]
 
     logits = []
     labels = []
@@ -89,7 +88,7 @@ def inference_tflite_model(tflite_model_filepath, dataloader, a=1.0, b=0):
         for image, label in dataloader:
             image_nhwc = image.permute(0, 2, 3, 1).numpy().astype(np.float32)
 
-            image_int8 = (image_nhwc / input_scale + input_zero_point).astype(input_details["dtype"])
+            image_int8 = (image_nhwc / input_scale + input_zero_point).astype(input_details[0]["dtype"])
             
             interpreter.set_tensor(input_details[0]['index'], image_int8)
             interpreter.invoke()

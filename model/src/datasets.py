@@ -1,28 +1,10 @@
-import torchvision.transforms as T
+import albumentations as A
+from albumentations.pytorch import ToTensorV2
 import torch
 from torch.utils.data import Dataset
-import pandas as pd
-import numpy as np
 import os
+import cv2
 from PIL import Image
-import requests
-from io import BytesIO
-
-def create_url_df(cat_urls_path: str, no_cat_urls_path: str) -> pd.DataFrame:
-  with open(cat_urls_path) as f:
-    cat_urls = f.readlines()
-
-  with open(no_cat_urls_path) as f:
-    no_cat_urls = f.readlines()
-
-  urls = np.concatenate([cat_urls, no_cat_urls])
-  labels = np.concatenate([np.ones_like(cat_urls, dtype=np.float64), np.zeros_like(no_cat_urls, dtype=np.float64)])
-  url_df = pd.DataFrame({
-      'url' : urls,
-      'label' : labels,
-  })
-
-  return url_df
 
 class CatCamDataset(Dataset):
   def __init__(self, root_dir, aug_args, mode="train"):
@@ -39,48 +21,87 @@ class CatCamDataset(Dataset):
       for img_name in os.listdir(class_dir):
         img_path = os.path.join(class_dir, img_name)
         self.img_paths.append(img_path)
-        self.labels.append(float(label-1))
+        self.labels.append(float(label))
 
     self._init_transforms()
 
   def _init_transforms(self):
-    if (self.mode == "train"):
-      self.transforms = T.Compose(
-          [
-            T.Resize((self.aug_args["imgsz"], self.aug_args["imgsz"])),
-            T.RandomHorizontalFlip(p=self.aug_args["hflip_prob"]),
-            T.RandomRotation(self.aug_args["rotation_degrees"]),
-            T.RandomPerspective(distortion_scale=self.aug_args["perspective_scale"], p=self.aug_args["perspective_prob"]),
-            T.ColorJitter(
+    if self.mode == "train":
+        self.transforms = A.Compose([
+            A.HorizontalFlip(p=self.aug_args["hflip_prob"]),
+            A.Rotate(
+                limit=self.aug_args["rotation_degrees"],
+                p=self.aug_args["rotation_prob"]
+            ),
+            A.Perspective(
+                scale=self.aug_args["perspective_scale"],
+                p=self.aug_args["perspective_prob"]
+            ),
+            A.RandomScale(
+              scale_limit=self.aug_args["random_scale_limit"], 
+              p=self.aug_args["random_scale_prob"]
+              ),
+
+            A.PadIfNeeded(
+              min_height=self.aug_args["imgsz"], 
+              min_width=self.aug_args["imgsz"], 
+              border_mode=getattr(cv2, f'BORDER_{self.aug_args["pad_border_mode"].upper()}'), 
+              position=self.aug_args["pad_position"],
+              p=1.0
+            ),
+
+            A.RandomCrop(
+              height=self.aug_args["imgsz"], 
+              width=self.aug_args["imgsz"], 
+              p=1.0
+            ),
+            
+            A.ColorJitter(
                 brightness=self.aug_args["brightness_jitter"],
                 contrast=self.aug_args["contrast_jitter"],
                 saturation=self.aug_args["saturation_jitter"],
-                hue=self.aug_args["hue_jitter"]
+                hue=self.aug_args["hue_jitter"],
+                p=self.aug_args["color_jitter_prob"]
             ),
-            T.RandomGrayscale(p=self.aug_args["grayscale_prob"]),
-            T.GaussianBlur(
-                kernel_size=self.aug_args["gaussian_blur_kernel"],
-                sigma=self.aug_args["gaussian_blur_sigma"]
+            A.ToGray(p=self.aug_args["grayscale_prob"]),
+            
+            A.GaussianBlur(
+                blur_limit=self.aug_args["gaussian_blur_kernel"],
+                sigma_limit=self.aug_args["gaussian_blur_sigma"],
+                p=self.aug_args["gaussian_blur_prob"]
             ),
-            T.ToTensor(),
-            T.Normalize(
+            A.GaussNoise(
+                var_limit=(0, self.aug_args["gaussian_noise_var"]),
+                p=self.aug_args["gaussian_noise_prob"]
+            ),
+            
+            A.CoarseDropout(
+                max_holes=self.aug_args["coarse_dropout_max_holes"],
+                max_height=self.aug_args["coarse_dropout_max_height"],
+                max_width=self.aug_args["coarse_dropout_max_width"],
+                min_holes=self.aug_args["coarse_dropout_min_holes"],
+                min_height=self.aug_args["coarse_dropout_min_height"],
+                min_width=self.aug_args["coarse_dropout_min_width"],
+                fill_value=self.aug_args["coarse_dropout_fill_value"],
+                p=self.aug_args["coarse_dropout_prob"]
+            ),
+            
+            A.Normalize(
                 mean=self.aug_args["normalize_mean"],
                 std=self.aug_args["normalize_std"]
             ),
-            T.RandomErasing(
-                p=self.aug_args["random_erase_prob"],
-                scale=self.aug_args["random_erase_scale"]
-            )
+            ToTensorV2()
         ])
     else:
-      self.transforms = T.Compose(
-          [
-            T.Resize((self.aug_args["imgsz"], self.aug_args["imgsz"])),
-            T.CenterCrop(self.aug_args["center_crop_size"]),
-            T.ToTensor(),
-            T.Normalize(mean=self.aug_args["normalize_mean"], std=self.aug_args["normalize_std"])
-          ]
-        )
+        # Валидация
+        self.transforms = A.Compose([
+            A.Resize(self.aug_args["imgsz"], self.aug_args["imgsz"]),
+            A.Normalize(
+                mean=self.aug_args["normalize_mean"],
+                std=self.aug_args["normalize_std"]
+            ),
+            ToTensorV2()
+        ])
 
   def __len__(self):
     return len(self.labels)
